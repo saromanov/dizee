@@ -1,8 +1,10 @@
-// Package dizee shrinks noisy text (JSON, logs, plain text) before it is fed
-// to an AI agent, so less of the context window is spent on formatting noise.
+// Package dizee shrinks noisy text (JSON, logs, terminal output, plain text)
+// before it is fed to an AI agent, so less of the context window is spent on
+// formatting noise.
 //
 // Compression is deterministic and cheap: JSON is compacted without changing
-// its meaning, log files collapse runs of identical lines, plain text drops
+// its meaning, log files collapse runs of identical lines, terminal output is
+// stripped of ANSI escape sequences and redraw noise, plain text drops
 // trailing whitespace and repeated blank lines. If a transform does not make
 // the input smaller, the original bytes are returned untouched.
 package dizee
@@ -20,9 +22,10 @@ type Kind string
 
 // Supported content kinds.
 const (
-	KindJSON Kind = "json"
-	KindLog  Kind = "log"
-	KindText Kind = "text"
+	KindJSON     Kind = "json"
+	KindLog      Kind = "log"
+	KindTerminal Kind = "terminal"
+	KindText     Kind = "text"
 )
 
 // Stats describes one shrink operation.
@@ -45,8 +48,8 @@ func (r Result) Saved() int {
 	return r.Stats.Before - r.Stats.After
 }
 
-// Detect classifies input as JSON, log or plain text. It never fails:
-// unrecognized content falls back to text.
+// Detect classifies input as JSON, log, terminal output or plain text. It
+// never fails: unrecognized content falls back to text.
 func Detect(b []byte) Kind {
 	trimmed := bytes.TrimLeft(b, " \t\r\n")
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid(b) {
@@ -54,6 +57,9 @@ func Detect(b []byte) Kind {
 	}
 	if isNDJSON(b) {
 		return KindJSON
+	}
+	if isTerminal(b) {
+		return KindTerminal
 	}
 	if isLog(b) {
 		return KindLog
@@ -80,10 +86,12 @@ func Shrink(b []byte, force Kind) (Result, error) {
 		}
 	case KindLog:
 		out = shrinkLog(b)
+	case KindTerminal:
+		out = shrinkTerminal(b)
 	case KindText:
 		out = shrinkText(b)
 	default:
-		return Result{}, fmt.Errorf("unknown kind %q (want json, log or text)", kind)
+		return Result{}, fmt.Errorf("unknown kind %q (want json, log, terminal or text)", kind)
 	}
 	if len(out) >= len(b) {
 		return Result{Stats: Stats{Kind: kind, Before: len(b), After: len(b)}}, nil
@@ -135,6 +143,13 @@ func isNDJSON(b []byte) bool {
 		nonEmpty++
 	}
 	return nonEmpty >= 2
+}
+
+// isTerminal reports whether b looks like a dump of terminal output. A few
+// stray escape bytes are treated as noise in an ordinary text file, so at
+// least three are required before committing to the terminal transform.
+func isTerminal(b []byte) bool {
+	return bytes.Count(b, []byte{0x1b}) >= 3
 }
 
 // shrinkJSON compacts a single JSON document, or compacts NDJSON line by line.
@@ -232,4 +247,110 @@ func shrinkText(b []byte) []byte {
 		out = strings.TrimSuffix(out, "\n")
 	}
 	return []byte(out)
+}
+
+// shrinkTerminal strips ANSI escape sequences and carriage-return redraws
+// from a terminal dump, then re-detects the cleaned content: stripped
+// terminal output often turns out to be a log or a JSON document, which gets
+// the corresponding transform applied on top.
+func shrinkTerminal(b []byte) []byte {
+	out := stripANSI(b)
+	out = collapseCarriageReturns(out)
+	switch {
+	case json.Valid(out) || isNDJSON(out):
+		if c, err := shrinkJSON(out); err == nil {
+			out = c
+		} else {
+			out = shrinkText(out)
+		}
+	case isLog(out):
+		out = shrinkLog(out)
+	default:
+		out = shrinkText(out)
+	}
+	return out
+}
+
+// stripANSI removes ANSI escape sequences: CSI sequences (SGR colors, cursor
+// movement, erasing), OSC sequences (window titles, hyperlinks) and the
+// remaining two- and three-byte escapes. Text content is kept byte for byte.
+func stripANSI(b []byte) []byte {
+	if bytes.IndexByte(b, 0x1b) < 0 {
+		return b
+	}
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); {
+		if c := b[i]; c != 0x1b {
+			out = append(out, c)
+			i++
+			continue
+		}
+		i = skipEscape(b, i)
+	}
+	return out
+}
+
+// skipEscape returns the index just past the escape sequence starting at i
+// (where b[i] == ESC). Malformed sequences are skipped up to the first byte
+// that breaks the grammar, so scanning always makes progress.
+func skipEscape(b []byte, i int) int {
+	if i+1 >= len(b) {
+		return len(b) // trailing ESC at end of input
+	}
+	switch b[i+1] {
+	case '[': // CSI: ESC [ params(0x30-0x3F) intermediates(0x20-0x2F) final(0x40-0x7E)
+		j := i + 2
+		for j < len(b) && b[j] >= 0x20 && b[j] <= 0x3f {
+			j++
+		}
+		if j < len(b) && b[j] >= 0x40 && b[j] <= 0x7e {
+			return j + 1
+		}
+		return j
+	case ']': // OSC: ESC ] ... (BEL | ESC \). An OSC payload never contains
+		// \n, so a line break means the sequence is truncated — stop there
+		// instead of swallowing the rest of the input. The cap guards the
+		// unterminated case.
+		const oscLimit = 4096
+		j := i + 2
+		for j < len(b) && j-i <= oscLimit {
+			switch {
+			case b[j] == 0x07:
+				return j + 1
+			case b[j] == 0x1b && j+1 < len(b) && b[j+1] == '\\':
+				return j + 2
+			case b[j] == '\n':
+				return j
+			}
+			j++
+		}
+		return j
+	default: // two- or three-byte escape: ESC intermediates(0x20-0x2F) final(0x30-0x7E)
+		j := i + 1
+		for j < len(b) && b[j] >= 0x20 && b[j] <= 0x2f {
+			j++
+		}
+		if j < len(b) && b[j] >= 0x30 && b[j] <= 0x7e {
+			return j + 1
+		}
+		return j
+	}
+}
+
+// collapseCarriageReturns keeps only the text after the last carriage return
+// within each line, which turns progress redraws ("10%\r20%\r100%") into the
+// final visible line. A \r right before \n is a CRLF line break, not a redraw.
+func collapseCarriageReturns(b []byte) []byte {
+	if bytes.IndexByte(b, '\r') < 0 {
+		return b
+	}
+	lines := bytes.Split(b, []byte("\n"))
+	for i, line := range lines {
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		if j := bytes.LastIndexByte(line, '\r'); j >= 0 {
+			line = line[j+1:]
+		}
+		lines[i] = line
+	}
+	return bytes.Join(lines, []byte("\n"))
 }

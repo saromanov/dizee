@@ -1,5 +1,5 @@
-// Command dizee shrinks JSON, logs and plain text so AI agents spend fewer
-// context tokens on formatting noise.
+// Command dizee shrinks JSON, logs, terminal output and plain text so AI
+// agents spend fewer context tokens on formatting noise.
 //
 // Compression stats go to stderr; the compressed bytes go to stdout, so
 // dizee can be dropped into a pipeline without changing its plumbing.
@@ -23,7 +23,7 @@ func main() {
 
 func run() int {
 	var (
-		forcedKind  = flag.String("k", "", "force content kind: json, log or text (default: auto-detect)")
+		forcedKind  = flag.String("k", "", "force content kind: json, log, terminal or text (default: auto-detect)")
 		showStats   = flag.Bool("stats", true, "print compression stats to stderr")
 		showVersion = flag.Bool("version", false, "print version and exit")
 	)
