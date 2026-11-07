@@ -1,11 +1,11 @@
 # dizee
 
-Shrink noisy JSON, logs and plain text before they hit your AI agent's context window.
+Shrink noisy JSON, logs, terminal output and plain text before they hit your AI agent's context window.
 
 Agents read a lot of machine output: pretty-printed JSON, walls of repeated log
-lines, trailing whitespace. `dizee` is a tiny CLI (and Go package) that compacts
-that output deterministically, so the model spends tokens on content instead of
-formatting.
+lines, ANSI-colored terminal dumps, trailing whitespace. `dizee` is a tiny CLI
+(and Go package) that compacts that output deterministically, so the model
+spends tokens on content instead of formatting.
 
 ## Install
 
@@ -27,8 +27,8 @@ $ dizee build.log > build.compact.log
 dizee: log: 45210 -> 8112 bytes (-82.1%)
 ```
 
-Auto-detection picks the transform; force one with `-k json|log|text` when the
-guess is wrong:
+Auto-detection picks the transform; force one with `-k json|log|terminal|text`
+when the guess is wrong:
 
 ```
 dizee -k log app.log
@@ -40,6 +40,7 @@ dizee -k log app.log
 |---|---|---|
 | `json` | compact whitespace, also works on NDJSON (one document per line) | lossless |
 | `log` | collapse runs of identical lines into `line [xN]` | adds a counter marker |
+| `terminal` | strip ANSI escapes (colors, cursor moves, titles) and carriage-return redraws; cleaned text is re-detected, so a colorized log then collapses like a log | stripped control bytes are lost |
 | `text` | trim trailing whitespace, collapse blank-line runs | line endings may differ |
 
 Guardrails:
