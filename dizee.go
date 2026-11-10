@@ -1,13 +1,14 @@
-// Package dizee shrinks noisy text (JSON, logs, Go code, terminal output, plain text)
-// before it is fed to an AI agent, so less of the context window is spent on
-// formatting noise.
+// Package dizee shrinks noisy text (JSON, logs, diffs, Go code, test reports,
+// terminal output, plain text) before it is fed to an AI agent, so less of the
+// context window is spent on formatting noise.
 //
 // Compression is deterministic and cheap: JSON is compacted without changing
 // its meaning, log files collapse runs of identical lines, diffs drop the
-// middle of long context runs, terminal output is stripped of ANSI escape
-// sequences and redraw noise, plain text drops trailing whitespace and
-// repeated blank lines. If a transform does not make the input smaller, the
-// original bytes are returned untouched.
+// middle of long context runs, Go code loses function bodies, test reports keep
+// failures while collapsing passes, terminal output is stripped of ANSI escape
+// sequences and redraw noise, plain text drops trailing whitespace and repeated
+// blank lines. If a transform does not make the input smaller, the original
+// bytes are returned untouched.
 package dizee
 
 import (
