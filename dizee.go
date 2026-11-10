@@ -34,6 +34,7 @@ type Stats struct {
 	Compressed bool // false when the original bytes were kept
 	Before     int
 	After      int
+	Tokens     int // approximate tokens in the output, using bytes/4
 }
 
 // Result is the outcome of a Shrink call. Output is set only when
@@ -94,12 +95,20 @@ func Shrink(b []byte, force Kind) (Result, error) {
 		return Result{}, fmt.Errorf("unknown kind %q (want json, log, terminal or text)", kind)
 	}
 	if len(out) >= len(b) {
-		return Result{Stats: Stats{Kind: kind, Before: len(b), After: len(b)}}, nil
+		return Result{Stats: Stats{
+			Kind: kind, Before: len(b), After: len(b), Tokens: estimateTokens(len(b)),
+		}}, nil
 	}
 	return Result{
-		Stats:  Stats{Kind: kind, Compressed: true, Before: len(b), After: len(out)},
+		Stats: Stats{
+			Kind: kind, Compressed: true, Before: len(b), After: len(out), Tokens: estimateTokens(len(out)),
+		},
 		Output: out,
 	}, nil
+}
+
+func estimateTokens(n int) int {
+	return (n + 3) / 4
 }
 
 var logLineRe = regexp.MustCompile(`(?m)^(?:` +

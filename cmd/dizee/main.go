@@ -78,14 +78,17 @@ func run() int {
 }
 
 func printStats(res dizee.Result) {
+	fmt.Fprint(os.Stderr, formatStats(res))
+}
+
+func formatStats(res dizee.Result) string {
 	name := string(res.Stats.Kind)
 	if !res.Stats.Compressed {
-		fmt.Fprintf(os.Stderr, "dizee: %s: kept original (%d bytes, nothing to save)\n", name, res.Stats.Before)
-		return
+		return fmt.Sprintf("dizee: %s: kept original (%d bytes, ~%d tokens, nothing to save)\n", name, res.Stats.Before, res.Stats.Tokens)
 	}
 	pct := 0.0
 	if res.Stats.Before > 0 {
 		pct = 100 * float64(res.Saved()) / float64(res.Stats.Before)
 	}
-	fmt.Fprintf(os.Stderr, "dizee: %s: %d -> %d bytes (-%.1f%%)\n", name, res.Stats.Before, res.Stats.After, pct)
+	return fmt.Sprintf("dizee: %s: %d -> %d bytes (~%d tokens, -%.1f%%)\n", name, res.Stats.Before, res.Stats.After, res.Stats.Tokens, pct)
 }
