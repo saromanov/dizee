@@ -21,11 +21,14 @@ stderr, so stdout stays clean:
 ```
 $ dizee < payload.json
 {"user":"ada","roles":["admin","dev"]}
-dizee: json: 128 -> 42 bytes (-67.2%)
+dizee: json: 128 -> 42 bytes (~11 tokens, -67.2%)
 
 $ dizee build.log > build.compact.log
-dizee: log: 45210 -> 8112 bytes (-82.1%)
+dizee: log: 45210 -> 8112 bytes (~2028 tokens, -82.1%)
 ```
+
+The token count uses the `output bytes / 4` heuristic, rounded up. It is useful
+for comparing transforms, not for billing or exact model tokenization.
 
 Auto-detection picks the transform; force one with `-k json|log|terminal|text`
 when the guess is wrong:

@@ -25,6 +25,9 @@ func TestShrinkJSON(t *testing.T) {
 	if res.Saved() != res.Stats.Before-res.Stats.After {
 		t.Errorf("Saved() = %d, want %d", res.Saved(), res.Stats.Before-res.Stats.After)
 	}
+	if want := (len(res.Output) + 3) / 4; res.Stats.Tokens != want {
+		t.Errorf("Tokens = %d, want %d", res.Stats.Tokens, want)
+	}
 }
 
 func TestShrinkNDJSON(t *testing.T) {
