@@ -1,5 +1,7 @@
 # dizee
 
+[![GitHub release](https://img.shields.io/github/v/release/saromanov/dizee)](https://github.com/saromanov/dizee/releases/latest)
+
 Shrink noisy JSON, logs, diffs, Go code, test reports, terminal output and plain text before they hit your AI agent's context window.
 
 Agents read a lot of machine output: pretty-printed JSON, walls of repeated log
