@@ -1,13 +1,14 @@
-// Package dizee shrinks noisy text (JSON, logs, Go code, terminal output, plain text)
-// before it is fed to an AI agent, so less of the context window is spent on
-// formatting noise.
+// Package dizee shrinks noisy text (JSON, logs, diffs, Go code, test reports,
+// terminal output, plain text) before it is fed to an AI agent, so less of the
+// context window is spent on formatting noise.
 //
 // Compression is deterministic and cheap: JSON is compacted without changing
 // its meaning, log files collapse runs of identical lines, diffs drop the
-// middle of long context runs, terminal output is stripped of ANSI escape
-// sequences and redraw noise, plain text drops trailing whitespace and
-// repeated blank lines. If a transform does not make the input smaller, the
-// original bytes are returned untouched.
+// middle of long context runs, Go code loses function bodies, test reports keep
+// failures while collapsing passes, terminal output is stripped of ANSI escape
+// sequences and redraw noise, plain text drops trailing whitespace and repeated
+// blank lines. If a transform does not make the input smaller, the original
+// bytes are returned untouched.
 package dizee
 
 import (
@@ -27,6 +28,7 @@ const (
 	KindLog      Kind = "log"
 	KindDiff     Kind = "diff"
 	KindCode     Kind = "code"
+	KindTest     Kind = "test"
 	KindTerminal Kind = "terminal"
 	KindText     Kind = "text"
 )
@@ -52,8 +54,8 @@ func (r Result) Saved() int {
 	return r.Stats.Before - r.Stats.After
 }
 
-// Detect classifies input as JSON, log, diff, terminal output or plain text.
-// It never fails: unrecognized content falls back to text.
+// Detect classifies input as JSON, log, diff, test report, terminal output or
+// plain text. It never fails: unrecognized content falls back to text.
 func Detect(b []byte) Kind {
 	trimmed := bytes.TrimLeft(b, " \t\r\n")
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid(b) {
@@ -67,6 +69,9 @@ func Detect(b []byte) Kind {
 	}
 	if isDiff(b) {
 		return KindDiff
+	}
+	if isTestReport(b) {
+		return KindTest
 	}
 	if isLog(b) {
 		return KindLog
@@ -101,12 +106,18 @@ func Shrink(b []byte, force Kind) (Result, error) {
 		if err != nil {
 			return Result{}, fmt.Errorf("shrink code: %w", err)
 		}
+	case KindTest:
+		var err error
+		out, err = shrinkTest(b)
+		if err != nil {
+			return Result{}, fmt.Errorf("shrink test: %w", err)
+		}
 	case KindTerminal:
 		out = shrinkTerminal(b)
 	case KindText:
 		out = shrinkText(b)
 	default:
-		return Result{}, fmt.Errorf("unknown kind %q (want json, log, diff, code, terminal or text)", kind)
+		return Result{}, fmt.Errorf("unknown kind %q (want json, log, diff, code, test, terminal or text)", kind)
 	}
 	return newResult(b, out, kind), nil
 }
