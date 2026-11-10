@@ -1,4 +1,4 @@
-// Package dizee shrinks noisy text (JSON, logs, terminal output, plain text)
+// Package dizee shrinks noisy text (JSON, logs, Go code, terminal output, plain text)
 // before it is fed to an AI agent, so less of the context window is spent on
 // formatting noise.
 //
@@ -26,6 +26,7 @@ const (
 	KindJSON     Kind = "json"
 	KindLog      Kind = "log"
 	KindDiff     Kind = "diff"
+	KindCode     Kind = "code"
 	KindTerminal Kind = "terminal"
 	KindText     Kind = "text"
 )
@@ -94,12 +95,18 @@ func Shrink(b []byte, force Kind) (Result, error) {
 		out = shrinkLog(b)
 	case KindDiff:
 		out = shrinkDiff(b, 1)
+	case KindCode:
+		var err error
+		out, err = shrinkCode(b)
+		if err != nil {
+			return Result{}, fmt.Errorf("shrink code: %w", err)
+		}
 	case KindTerminal:
 		out = shrinkTerminal(b)
 	case KindText:
 		out = shrinkText(b)
 	default:
-		return Result{}, fmt.Errorf("unknown kind %q (want json, log, diff, terminal or text)", kind)
+		return Result{}, fmt.Errorf("unknown kind %q (want json, log, diff, code, terminal or text)", kind)
 	}
 	return newResult(b, out, kind), nil
 }

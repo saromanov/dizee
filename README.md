@@ -1,6 +1,6 @@
 # dizee
 
-Shrink noisy JSON, logs, terminal output and plain text before they hit your AI agent's context window.
+Shrink noisy JSON, logs, Go code, terminal output and plain text before they hit your AI agent's context window.
 
 Agents read a lot of machine output: pretty-printed JSON, walls of repeated log
 lines, ANSI-colored terminal dumps, trailing whitespace. `dizee` is a tiny CLI
@@ -30,12 +30,13 @@ dizee: log: 45210 -> 8112 bytes (~2028 tokens, -82.1%)
 The token count uses the `output bytes / 4` heuristic, rounded up. It is useful
 for comparing transforms, not for billing or exact model tokenization.
 
-Auto-detection picks the transform; force one with `-k json|log|diff|terminal|text`
-when the guess is wrong:
+Auto-detection picks the transform; force one with `-k json|log|diff|code|terminal|text`
+when the guess is wrong. Go code is never auto-detected:
 
 ```
 dizee -k log app.log
 dizee -diff-context=2 < changes.patch
+dizee -k code < main.go
 ```
 
 ## What it does
@@ -45,6 +46,7 @@ dizee -diff-context=2 < changes.patch
 | `json` | compact whitespace, also works on NDJSON (one document per line) | lossless |
 | `log` | collapse runs of identical lines into `line [xN]` | adds a counter marker |
 | `diff` | keep headers and changed lines; collapse context runs with `-diff-context=1|2` boundary lines | omitted context is recoverable only from the original diff |
+| `code` | Go only: keep imports, declarations and signatures, remove function bodies | function implementations are omitted |
 | `terminal` | strip ANSI escapes (colors, cursor moves, titles) and carriage-return redraws; cleaned text is re-detected, so a colorized log then collapses like a log | stripped control bytes are lost |
 | `text` | trim trailing whitespace, collapse blank-line runs | line endings may differ |
 
