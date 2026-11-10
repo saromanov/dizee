@@ -30,11 +30,12 @@ dizee: log: 45210 -> 8112 bytes (~2028 tokens, -82.1%)
 The token count uses the `output bytes / 4` heuristic, rounded up. It is useful
 for comparing transforms, not for billing or exact model tokenization.
 
-Auto-detection picks the transform; force one with `-k json|log|terminal|text`
+Auto-detection picks the transform; force one with `-k json|log|diff|terminal|text`
 when the guess is wrong:
 
 ```
 dizee -k log app.log
+dizee -diff-context=2 < changes.patch
 ```
 
 ## What it does
@@ -43,6 +44,7 @@ dizee -k log app.log
 |---|---|---|
 | `json` | compact whitespace, also works on NDJSON (one document per line) | lossless |
 | `log` | collapse runs of identical lines into `line [xN]` | adds a counter marker |
+| `diff` | keep headers and changed lines; collapse context runs with `-diff-context=1|2` boundary lines | omitted context is recoverable only from the original diff |
 | `terminal` | strip ANSI escapes (colors, cursor moves, titles) and carriage-return redraws; cleaned text is re-detected, so a colorized log then collapses like a log | stripped control bytes are lost |
 | `text` | trim trailing whitespace, collapse blank-line runs | line endings may differ |
 

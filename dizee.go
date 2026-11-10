@@ -3,10 +3,11 @@
 // formatting noise.
 //
 // Compression is deterministic and cheap: JSON is compacted without changing
-// its meaning, log files collapse runs of identical lines, terminal output is
-// stripped of ANSI escape sequences and redraw noise, plain text drops
-// trailing whitespace and repeated blank lines. If a transform does not make
-// the input smaller, the original bytes are returned untouched.
+// its meaning, log files collapse runs of identical lines, diffs drop the
+// middle of long context runs, terminal output is stripped of ANSI escape
+// sequences and redraw noise, plain text drops trailing whitespace and
+// repeated blank lines. If a transform does not make the input smaller, the
+// original bytes are returned untouched.
 package dizee
 
 import (
@@ -24,6 +25,7 @@ type Kind string
 const (
 	KindJSON     Kind = "json"
 	KindLog      Kind = "log"
+	KindDiff     Kind = "diff"
 	KindTerminal Kind = "terminal"
 	KindText     Kind = "text"
 )
@@ -49,8 +51,8 @@ func (r Result) Saved() int {
 	return r.Stats.Before - r.Stats.After
 }
 
-// Detect classifies input as JSON, log, terminal output or plain text. It
-// never fails: unrecognized content falls back to text.
+// Detect classifies input as JSON, log, diff, terminal output or plain text.
+// It never fails: unrecognized content falls back to text.
 func Detect(b []byte) Kind {
 	trimmed := bytes.TrimLeft(b, " \t\r\n")
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid(b) {
@@ -61,6 +63,9 @@ func Detect(b []byte) Kind {
 	}
 	if isTerminal(b) {
 		return KindTerminal
+	}
+	if isDiff(b) {
+		return KindDiff
 	}
 	if isLog(b) {
 		return KindLog
@@ -87,24 +92,30 @@ func Shrink(b []byte, force Kind) (Result, error) {
 		}
 	case KindLog:
 		out = shrinkLog(b)
+	case KindDiff:
+		out = shrinkDiff(b, 1)
 	case KindTerminal:
 		out = shrinkTerminal(b)
 	case KindText:
 		out = shrinkText(b)
 	default:
-		return Result{}, fmt.Errorf("unknown kind %q (want json, log, terminal or text)", kind)
+		return Result{}, fmt.Errorf("unknown kind %q (want json, log, diff, terminal or text)", kind)
 	}
+	return newResult(b, out, kind), nil
+}
+
+func newResult(b, out []byte, kind Kind) Result {
 	if len(out) >= len(b) {
 		return Result{Stats: Stats{
 			Kind: kind, Before: len(b), After: len(b), Tokens: estimateTokens(len(b)),
-		}}, nil
+		}}
 	}
 	return Result{
 		Stats: Stats{
 			Kind: kind, Compressed: true, Before: len(b), After: len(out), Tokens: estimateTokens(len(out)),
 		},
 		Output: out,
-	}, nil
+	}
 }
 
 func estimateTokens(n int) int {
