@@ -23,7 +23,7 @@ func main() {
 
 func run() int {
 	var (
-		forcedKind  = flag.String("k", "", "force content kind: json, log, diff, code, terminal or text (default: auto-detect)")
+		forcedKind  = flag.String("k", "", "force content kind: json, log, diff, code, test, terminal or text (default: auto-detect)")
 		diffContext = flag.Int("diff-context", 1, "context lines to keep at each diff run boundary (1 or 2)")
 		showStats   = flag.Bool("stats", true, "print compression stats to stderr")
 		showVersion = flag.Bool("version", false, "print version and exit")
