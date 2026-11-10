@@ -16,7 +16,7 @@ var (
 )
 
 func isTestReport(b []byte) bool {
-	return isPytest(b) || isJest(b)
+	return isPytest(b) || isJest(b) || isJUnit(b)
 }
 
 func isPytest(b []byte) bool {
@@ -34,6 +34,8 @@ func shrinkTest(b []byte) ([]byte, error) {
 		return shrinkPytest(b), nil
 	case isJest(b):
 		return shrinkJest(b), nil
+	case isJUnit(b):
+		return shrinkJUnit(b)
 	default:
 		return nil, fmt.Errorf("unrecognized test report (want pytest, Jest or JUnit XML)")
 	}
