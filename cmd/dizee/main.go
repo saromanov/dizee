@@ -23,7 +23,8 @@ func main() {
 
 func run() int {
 	var (
-		forcedKind  = flag.String("k", "", "force content kind: json, log, terminal or text (default: auto-detect)")
+		forcedKind  = flag.String("k", "", "force content kind: json, log, diff, terminal or text (default: auto-detect)")
+		diffContext = flag.Int("diff-context", 1, "context lines to keep at each diff run boundary (1 or 2)")
 		showStats   = flag.Bool("stats", true, "print compression stats to stderr")
 		showVersion = flag.Bool("version", false, "print version and exit")
 	)
@@ -55,7 +56,13 @@ func run() int {
 		return 1
 	}
 
-	res, err := dizee.Shrink(b, dizee.Kind(strings.TrimSpace(*forcedKind)))
+	kind := dizee.Kind(strings.TrimSpace(*forcedKind))
+	var res dizee.Result
+	if kind == dizee.KindDiff || (kind == "" && dizee.Detect(b) == dizee.KindDiff) {
+		res, err = dizee.ShrinkDiff(b, *diffContext)
+	} else {
+		res, err = dizee.Shrink(b, kind)
+	}
 	if err != nil {
 		_, _ = os.Stdout.Write(b) // pass the original through so pipelines survive
 		fmt.Fprintf(os.Stderr, "dizee: %v\n", err)
