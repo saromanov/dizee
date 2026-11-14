@@ -168,3 +168,47 @@ func TestLossyKinds(t *testing.T) {
 		}
 	}
 }
+
+func TestShrinkWithRecoveryGoTestReport(t *testing.T) {
+	input := []byte("=== RUN   TestAnswerReturnsTheCorrectAnswer\n" +
+		"--- FAIL: TestAnswerReturnsTheCorrectAnswer (0.00s)\n" +
+		"    main_test.go:12: got 41, want 42 for input case \"edge\" at index 7 of the table\n" +
+		"=== RUN   TestWarmCachePopulatesAllBuckets\n" +
+		"--- PASS: TestWarmCachePopulatesAllBuckets (0.00s)\n" +
+		"=== RUN   TestHealthcheckEndpointRespondsWithinDeadline\n" +
+		"--- PASS: TestHealthcheckEndpointRespondsWithinDeadline (0.00s)\n" +
+		"=== RUN   TestMetricsHandlerEmitsCounters\n" +
+		"--- PASS: TestMetricsHandlerEmitsCounters (0.00s)\n" +
+		"FAIL\n" +
+		"exit status 1\n" +
+		"FAIL\texample.com/proj\t0.005s\n")
+	recovery := &fakeRecoveryStore{}
+	outcome := shrinkWithRecovery(input, "", 1, recovery)
+	if outcome.err != nil {
+		t.Fatalf("shrinkWithRecovery: %v", outcome.err)
+	}
+	if outcome.warning != nil {
+		t.Fatalf("unexpected warning: %v", outcome.warning)
+	}
+	if !outcome.result.Stats.Compressed {
+		t.Fatalf("expected compressed output, got %+v", outcome.result.Stats)
+	}
+	if outcome.result.Stats.Kind != dizee.KindTest {
+		t.Errorf("detected kind = %q, want test", outcome.result.Stats.Kind)
+	}
+	if !bytes.HasPrefix(outcome.output, []byte("[dizee:")) {
+		t.Errorf("output has no recovery handle: %q", outcome.output)
+	}
+	for _, want := range []string{
+		"[x3 passed]",
+		"--- FAIL: TestAnswerReturnsTheCorrectAnswer (0.00s)",
+		"    main_test.go:12: got 41, want 42 for input case \"edge\" at index 7 of the table",
+	} {
+		if !strings.Contains(string(outcome.output), want) {
+			t.Errorf("output does not contain %q:\n%s", want, outcome.output)
+		}
+	}
+	if recovery.calls != 1 {
+		t.Errorf("store Put calls = %d, want 1", recovery.calls)
+	}
+}
