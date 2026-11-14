@@ -50,7 +50,7 @@ dizee -k test < results.xml
 | `log` | collapse runs of identical lines into `line [xN]` | original saved by the CLI |
 | `diff` | keep headers and changed lines; collapse context runs with `-diff-context=1|2` boundary lines | original saved by the CLI |
 | `code` | Go only: keep imports, declarations and signatures, remove function bodies | original saved by the CLI |
-| `test` | pytest/Jest/JUnit: keep counters and complete failures, collapse passes into `[xN passed]` | original saved by the CLI |
+| `test` | pytest/Jest/JUnit/`go test`: keep counters and complete failures, collapse passes into `[xN passed]` | original saved by the CLI |
 | `terminal` | strip ANSI escapes (colors, cursor moves, titles) and carriage-return redraws; cleaned text is re-detected, so a colorized log then collapses like a log | original saved by the CLI |
 | `text` | trim trailing whitespace, collapse blank-line runs | line endings may differ |
 
